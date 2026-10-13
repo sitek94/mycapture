@@ -1,0 +1,6 @@
+.build/
+build/
+.swiftpm/
+# Private build plan, never published.
+PLAN.md
+/Packages/

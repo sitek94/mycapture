@@ -1,0 +1,37 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.13333,0.82745,0.93333,1.00000",
+      "srgb:0.03137,0.56863,0.69804,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "camera.png",
+          "name" : "camera"
+        },
+        {
+          "glass" : true,
+          "image-name" : "brackets.png",
+          "name" : "brackets"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.4
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}

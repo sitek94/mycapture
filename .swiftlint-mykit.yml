@@ -1,0 +1,63 @@
+# Shared SwiftLint rules for myKit and the apps that use it.
+# Apps keep a copy as .swiftlint-mykit.yml (scripts/sync-lint-config.sh) and point their .swiftlint.yml at it with parent_config.
+# Each token rule's message says how to fix the violation. Zero is not a magic number: `spacing: 0` passes. A real exception: `// swiftlint:disable:next <rule>` and a reason.
+
+disabled_rules:
+  # swift-format owns layout.
+  - trailing_comma
+  - opening_brace
+  - line_length
+  - vertical_parameter_alignment
+  - statement_position
+  - closure_parameter_position
+  - comma
+  - colon
+  - function_name_whitespace
+  # Carbon and Core Foundation calls need force unwraps and long parameter lists.
+  - force_unwrapping
+  - function_parameter_count
+
+identifier_name:
+  # Short names that are standard in loops, geometry and SQLite code.
+  excluded: [i, j, x, y, id, db, rc, to, at, ok]
+
+custom_rules:
+  raw_spacing:
+    name: Raw spacing
+    regex: '(\.padding\(\s*(\.[a-zA-Z]+\s*,\s*)?|spacing:\s*)(?!0\b)\d'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a space token: .space1 (4), .space2 (8), .space3 (12), .space4 (16), .space6 (24), .space8 (32)."
+    severity: error
+  raw_radius:
+    name: Raw corner radius
+    regex: 'cornerRadius:\s*(?!0\b)\d'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a radius token: .radiusPanel (26), .radiusCard (16), .radiusInner (10), .radiusSmall (6), or ConcentricRectangle near a container corner."
+    severity: error
+  system_font:
+    name: System font style
+    regex: '\.font\(\s*\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2|system)\b'
+    excluded: '.*/Tokens\.swift'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a text token: .textDisplay, .textTitle, .textHeadline, .textBody, .textCallout, .textCaption, .textCode. Font(.system(size:)) only for an SF Symbol used as a picture, with a disable comment."
+    severity: error
+  raw_color:
+    name: Raw color
+    regex: '(Color\(\s*(red|hue|white|\.sRGB|#)|\.(tint|foregroundStyle|fill|stroke|strokeBorder)\(\s*(Color)?\.(red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown)\b)'
+    excluded: '.*/(Tokens|Brand)\.swift'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a color token: .brand (accent only), .success, .warning, .danger. Text levels: .primary, .secondary, .tertiary. The app's brand value lives in Brand.swift."
+    severity: error
+  direct_glass:
+    name: Direct glass
+    regex: '\.glassEffect\('
+    excluded: '.*/Surfaces\.swift'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a myKit surface: .panelSurface(), .controlSurface(), .contentSurface()."
+    severity: error
+  raw_animation:
+    name: Raw animation
+    regex: '(withAnimation|\.animation)\(\s*(Animation)?\.(default|easeIn|easeOut|easeInOut|linear|spring|bouncy|snappy|smooth|interactiveSpring|interpolatingSpring)\b'
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Use a motion token: .quick (selection, hover, keys) or .standard (panels, toasts, layout)."
+    severity: error

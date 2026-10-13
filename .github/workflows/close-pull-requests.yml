@@ -1,0 +1,21 @@
+name: Close pull requests
+
+# Personal project: pull requests are not accepted (see CONTRIBUTING.md).
+# pull_request_target runs in this repository's context; it never checks out the PR's code.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close with a note
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr close "$PR" --comment "Thanks for taking the time! myCapture is a personal project and doesn't accept pull requests (see CONTRIBUTING.md). Feel free to keep this change in your fork."

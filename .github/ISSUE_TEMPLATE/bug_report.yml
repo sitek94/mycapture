@@ -1,0 +1,27 @@
+name: Bug report
+description: Something in myCapture doesn't work as described in the README. Feature requests are closed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: myCapture is a personal project; bug reports are welcome, but there is no promise of a fix or a reply. See CONTRIBUTING.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "26.5"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: myCapture version
+      description: The line in Settings → About, e.g. "myCapture 0.1.0 (1, a1b2c3d)".
+      placeholder: myCapture 0.1.0 (1, a1b2c3d)
