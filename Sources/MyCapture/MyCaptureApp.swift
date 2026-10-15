@@ -10,7 +10,7 @@ struct MyCaptureApp: App {
         MenuBarItem("myCapture", image: MenuBarGlyph.image) {
             AppActions(app: delegate.app)
             Divider()
-            AppMenuItems(appName: "myCapture", openSettings: delegate.app.showSettings)
+            AppMenuItems(appName: "myCapture", openSettings: { delegate.app.showSettings() })
         }
     }
 }
@@ -36,6 +36,8 @@ struct AppActions: View {
             .keyboardShortcut(app.windowShortcut.shortcut?.menuShortcut)
         Button("Restore Last Capture") { app.restoreLast() }
             .keyboardShortcut(app.restoreShortcut.shortcut?.menuShortcut)
+        Button("Capture History…") { app.history.toggle() }
+            .keyboardShortcut(app.historyShortcut.shortcut?.menuShortcut)
         Divider()
         Button("Open Screenshots Folder") { app.openSaveFolder() }
         if !app.screenRecordingAllowed {

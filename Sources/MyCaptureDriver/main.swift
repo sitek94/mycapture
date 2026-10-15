@@ -7,17 +7,27 @@
 //   status                        print permission state
 //   windows <owner>               list the owner's windows
 //   screenshot <png> [owner] [layer]  capture only the owner's on-screen windows (default myCapture), optionally one layer
+//   windowshot <png> <window id>  one window alone (ids from `windows`), also when covered
 //   key <combo>                   to the myCapture process only, e.g. esc, return
 //   type <text>                   to the myCapture process only
 //   globalkey <combo>             system-wide; only while the user is hands-off
-//   globalclick <x> <y> [right] [cmd] [shift]   system-wide click; only while the user is hands-off
+//   globalclick <x> <y> [right] [cmd] [shift] [window=<id>]   system-wide click; only while the user is hands-off.
+//                                 With window=<id> it refuses unless that window is topmost at the point.
+//   windowat <x> <y>              the topmost window at a point: id and owner
+//   globalmove <x> <y>            system-wide pointer move (hover); only while the user is hands-off
+//   globaldrag <x1> <y1> <x2> <y2> [window=<id>]  system-wide drag; only while the user is hands-off
 //   testwindow show|hide          a window with known content to capture; prints its frame (top-left coordinates)
 //   capture <area|window|clipboard> <x> <y> <w> <h>
 //                                 ask a myCapture launched with -uiTest YES to capture that rect without user input
 //   thumbnail <close|restore|save>  act on the newest thumbnail of a myCapture launched with -uiTest YES
-//   settings                      open the Settings window of a myCapture launched with -uiTest YES
+//   thumbnail editor              open the editor on the newest thumbnail
+//   thumbnail add <png>           a copy of any image as a new capture: thumbnail and history entry (for screenshots)
+//   editor <open png|drag x1 y1 x2 y2|save|close|activate|report>  act on the open editor (drag in image pixels); report writes editor.json
+//   history <toggle|restore|report>  open or close Capture History, restore its selection; report writes history.json
+//   settings [pane]               open the Settings window of a myCapture launched with -uiTest YES, on that pane
 //   click <x> <y>                 to the myCapture process only; global top-left coordinates
 //   front                         frontmost app
+//   clear <x> <y> <w> <h>         exit 1 when another app's window covers any part of the rect (a capture would show it)
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
@@ -93,33 +103,6 @@ func windowList(owner: String) -> String {
     }.joined(separator: "\n")
 }
 
-func screenshot(path: String, owner: String, layer: Int? = nil) async -> (String, Int32) {
-    do {
-        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
-        let mine = content.windows.filter {
-            $0.owningApplication?.applicationName == owner && $0.isOnScreen && $0.frame.height > 30 && (layer == nil || $0.windowLayer == layer)
-        }
-        guard let first = mine.first,
-            let display = content.displays.first(where: { $0.frame.intersects(first.frame) }) ?? content.displays.first
-        else { return ("no on-screen windows for \(owner)", 1) }
-        let filter = SCContentFilter(display: display, including: mine)
-        let union = mine.map(\.frame).reduce(first.frame) { $0.union($1) }
-        let scale = CGFloat(filter.pointPixelScale)
-        let config = SCStreamConfiguration()
-        config.sourceRect = union.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
-        config.width = Int(union.width * scale)
-        config.height = Int(union.height * scale)
-        config.showsCursor = false
-        // Transparent around the windows, so a script can place them on a synthetic background.
-        config.backgroundColor = .clear
-        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(filePath: path))
-        return ("saved \(path) \(image.width)x\(image.height) from \(mine.count) window(s) scale=\(Int(scale))", 0)
-    } catch {
-        return ("screenshot failed: \(error.localizedDescription)", 1)
-    }
-}
-
 var busy = false
 
 // One case per verb.
@@ -134,9 +117,17 @@ var busy = false
         return ("screen recording: \(CGPreflightScreenCaptureAccess()) accessibility: \(AXIsProcessTrusted())", 0)
     case "windows":
         return (windowList(owner: args.first ?? "myCapture"), 0)
+    case "clear":
+        let numbers = args.compactMap { Double($0) }
+        guard numbers.count == 4 else { return ("usage: clear x y w h", 2) }
+        let owner = coveringOwner(CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3]))
+        return owner.map { ("covered by \($0)", 1) } ?? ("clear", 0)
     case "screenshot":
         guard let path = args.first else { return ("missing path", 2) }
         return await screenshot(path: path, owner: args.count > 1 ? args[1] : "myCapture", layer: args.count > 2 ? Int(args[2]) : nil)
+    case "windowshot":
+        guard args.count == 2, let id = CGWindowID(args[1]) else { return ("usage: windowshot <png> <window id>", 2) }
+        return await windowShot(path: args[0], windowID: id)
     case "key":
         guard let pid = appPID() else { return ("myCapture is not running", 1) }
         guard let combo = args.first, postKey(combo, to: pid) else { return ("unknown key combo", 2) }
@@ -148,7 +139,33 @@ var busy = false
         guard let pid = appPID() else { return ("myCapture is not running", 1) }
         typeText(args.joined(separator: " "), to: pid)
         return ("ok", 0)
+    case "windowat":
+        guard args.count == 2, let x = Double(args[0]), let y = Double(args[1]) else { return ("usage: windowat x y", 2) }
+        return windowAt(CGPoint(x: x, y: y)).map { ("id=\($0.id) owner=\($0.owner)", 0) } ?? ("none", 1)
+    case "globalmove":
+        guard args.count == 2, let x = Double(args[0]), let y = Double(args[1]) else { return ("usage: globalmove x y", 2) }
+        CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left)?
+            .post(tap: .cghidEventTap)
+        return ("ok", 0)
+    case "globaldrag":
+        if let refusal = refuseUnlessWindow(args, at: args.count >= 2 ? (Double(args[0]), Double(args[1])) : (nil, nil)) { return refusal }
+        let numbers = args.filter { !$0.hasPrefix("window=") }.compactMap { Double($0) }
+        guard numbers.count == 4 else { return ("usage: globaldrag x1 y1 x2 y2", 2) }
+        let start = CGPoint(x: numbers[0], y: numbers[1])
+        let end = CGPoint(x: numbers[2], y: numbers[3])
+        func post(_ type: CGEventType, _ point: CGPoint) {
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            usleep(20_000)
+        }
+        post(.leftMouseDown, start)
+        for step in 1...20 {
+            let fraction = Double(step) / 20
+            post(.leftMouseDragged, CGPoint(x: start.x + (end.x - start.x) * fraction, y: start.y + (end.y - start.y) * fraction))
+        }
+        post(.leftMouseUp, end)
+        return ("ok", 0)
     case "globalclick":
+        if let refusal = refuseUnlessWindow(args, at: args.count >= 2 ? (Double(args[0]), Double(args[1])) : (nil, nil)) { return refusal }
         guard args.count >= 2, let x = Double(args[0]), let y = Double(args[1]) else { return ("usage: globalclick x y [right] [cmd] [shift]", 2) }
         let options = Set(args.dropFirst(2))
         let right = options.contains("right")
@@ -172,15 +189,34 @@ var busy = false
         }
         return (showTestWindow(), 0)
     case "thumbnail":
-        guard let action = args.first, ["close", "restore", "save", "saveas"].contains(action) else {
-            return ("usage: thumbnail <close|restore|save|saveas>", 2)
+        guard let action = args.first, ["close", "restore", "save", "saveas", "editor", "add"].contains(action),
+            action != "add" || args.count == 2
+        else {
+            return ("usage: thumbnail <close|restore|save|saveas|editor|add png>", 2)
         }
         DistributedNotificationCenter.default().postNotificationName(
-            .init("dev.maciek.mycapture.test.thumbnail"), object: nil, userInfo: ["action": action], deliverImmediately: true)
+            .init("dev.maciek.mycapture.test.thumbnail"), object: nil, userInfo: ["action": action, "file": args.last ?? ""],
+            deliverImmediately: true)
+        return ("ok", 0)
+    case "editor":
+        guard let action = args.first, ["open", "drag", "save", "close", "activate", "report"].contains(action) else {
+            return ("usage: editor <open png|drag x1 y1 x2 y2|save|close|activate|report>", 2)
+        }
+        DistributedNotificationCenter.default().postNotificationName(
+            .init("dev.maciek.mycapture.test.editor"), object: nil, userInfo: ["args": args.joined(separator: " ")],
+            deliverImmediately: true)
+        return ("ok", 0)
+    case "history":
+        guard let action = args.first, ["toggle", "restore", "report"].contains(action) else {
+            return ("usage: history <toggle|restore|report>", 2)
+        }
+        DistributedNotificationCenter.default().postNotificationName(
+            .init("dev.maciek.mycapture.test.history"), object: nil, userInfo: ["action": action], deliverImmediately: true)
         return ("ok", 0)
     case "settings":
         DistributedNotificationCenter.default().postNotificationName(
-            .init("dev.maciek.mycapture.test.settings"), object: nil, userInfo: nil, deliverImmediately: true)
+            .init("dev.maciek.mycapture.test.settings"), object: nil, userInfo: args.first.map { ["pane": $0] },
+            deliverImmediately: true)
         return ("ok", 0)
     case "capture":
         guard args.count == 5, ["area", "window", "clipboard"].contains(args[0]), args.dropFirst().allSatisfy({ Double($0) != nil })
@@ -312,3 +348,12 @@ default:
     exit(2)
 }
 app.run()
+
+/// For `window=<id>` in a global click or drag: an error unless that window is the topmost one at the point.
+@MainActor func refuseUnlessWindow(_ args: [String], at point: (Double?, Double?)) -> (String, Int32)? {
+    guard let expected = args.first(where: { $0.hasPrefix("window=") }).flatMap({ CGWindowID($0.dropFirst(7)) }) else { return nil }
+    guard let x = point.0, let y = point.1 else { return ("missing point", 2) }
+    let top = windowAt(CGPoint(x: x, y: y))
+    guard top?.id == expected else { return ("refused: topmost at \(Int(x)),\(Int(y)) is \(top.map { "\($0.id) \($0.owner)" } ?? "none")", 1) }
+    return nil
+}

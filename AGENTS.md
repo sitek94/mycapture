@@ -14,4 +14,4 @@ This file is a map, not the docs. Open the page that owns the task:
 - UI work runs in safe mode on test windows only. System-wide keys and clicks only with the user's go-ahead and hands off the Mac. Never capture or view the user's real screen content.
 - Bug fixes get a regression test where the logic allows.
 - New version: bump `VERSION` in `scripts/bundle.sh`, list user-visible changes under a new heading in `CHANGELOG.md`, tag `vX.Y.Z`.
-- Clean room: no code, assets or text from CleanShot X or other apps, and no reverse-engineering details in this repo.
+- No code, assets or text from other apps in this repo.

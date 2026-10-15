@@ -51,7 +51,7 @@ final class FreezeOverlay {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 // Space switches the capture tool to window mode: its camera cursor appears. Window captures show
-                // live windows, so the freeze and the crosshair go away at once, as in CleanShot X.
+                // live windows, so the freeze and the crosshair go away at once.
                 if Self.windowModeCursorVisible() {
                     self.hide()
                     return
@@ -121,7 +121,7 @@ final class FreezeOverlay {
     }
 }
 
-/// While ⌘ is held (as in CleanShot X): a crosshair across the display and a magnifier of the frozen image
+/// While ⌘ is held: a crosshair across the display and a magnifier of the frozen image
 /// next to the cursor.
 final class GuideView: NSView {
     /// 19 × 19 frozen pixels, each drawn 7 pt wide.

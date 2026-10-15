@@ -7,12 +7,14 @@ A small screenshot tool for macOS 26, built for one person: me.
 ![myCapture: two capture thumbnails at the bottom-left of the screen, the newest one showing Close, Copy and Save](docs/images/screenshot.png)
 
 > [!NOTE]
-> **Personal project.** myCapture is a clean-room rebuild of the parts of [CleanShot X](https://cleanshot.com) I actually use, with everything else left out. It is not affiliated with CleanShot X or its makers and contains no code from it. The code is public in case it's useful to someone; I build it for my own Mac, so there are no releases, no roadmap and no support. **Pull requests are not accepted** — fork it and make it yours. Bug reports are welcome (see [CONTRIBUTING](CONTRIBUTING.md)).
+> **Personal project.** myCapture is my own small screenshot tool, with only the features I use. The code is public in case it's useful to someone; I build it for my own Mac, so there are no releases, no roadmap and no support. **Pull requests are not accepted** — fork it and make it yours. Bug reports are welcome (see [CONTRIBUTING](CONTRIBUTING.md)).
 
 ## What it does
 
 - **Capture an area or a window** with macOS's own selection tool: the size label, <kbd>Space</kbd> for window mode, <kbd>⇧</kbd> and <kbd>⌥</kbd> while you drag. Hold <kbd>⌘</kbd> for a crosshair and a magnifier for pixel-exact edges.
 - **A floating thumbnail** at the bottom-left of the screen after each capture: drag it into any app, Copy, Save, or close it. Nothing is saved until you ask. Closed by mistake? Restore brings it back.
+- **Arrows on a capture**: double-click the thumbnail (or its pencil button) to open the editor. Draw, move and restyle arrows; closing the editor keeps them in the capture, without a question. They stay editable when you open it again.
+- **Capture History**: every capture of the last 3 days (1 day to 1 month, or off, in Settings), newest first, in a glass strip at the top of the screen; the pointer selects a card. Bring one back as a thumbnail, copy it, annotate it or drag it out.
 - **Area to clipboard** in one step: the clipboard gets the file and the image, so Finder and chat apps paste a file and image editors paste the picture.
 - **Freeze the screen** (Settings, off by default) to capture menus and tooltips that close when the mouse moves.
 - **Well-named files**: `26-10-12 19.26.43 Safari - Pull requests.png`, with the app and window title of what you captured. PNG at full resolution, marked as a screenshot for Finder and Spotlight.
@@ -20,7 +22,7 @@ A small screenshot tool for macOS 26, built for one person: me.
 
 ### Not included, on purpose
 
-Annotation, text recognition (OCR), screen recording, full-screen, scrolling and timed captures, cloud upload, pinning to the screen, capture history. If you need those, use CleanShot X.
+Annotation tools other than arrows, text recognition (OCR), screen recording, full-screen, scrolling and timed captures, cloud upload, pinning to the screen.
 
 ## Keyboard
 
@@ -31,7 +33,8 @@ Each shortcut can be changed in Settings, which shows Hyper (⌃⌥⇧⌘) as �
 | <kbd>⌃</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>A</kbd> | Capture an area to a thumbnail |
 | <kbd>⌃</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Q</kbd> | Capture an area to the clipboard |
 | <kbd>⌃</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>W</kbd> | Capture a window to a thumbnail |
-| <kbd>⌃</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>H</kbd> | Restore the last closed thumbnail |
+| <kbd>⌃</kbd><kbd>⇧</kbd><kbd>⌘</kbd><kbd>H</kbd> | Open or close Capture History |
+| No default (set it in Settings) | Restore the last closed thumbnail |
 
 While you select an area:
 
@@ -51,9 +54,41 @@ On a thumbnail, with the pointer on it:
 | Save, <kbd>⌘</kbd><kbd>S</kbd> | Save to the screenshots folder and close; <kbd>⌥</kbd>-click Save asks where |
 | Drag | Drop the file into any app; the thumbnail closes (<kbd>⌥</kbd> keeps it) |
 | <kbd>Space</kbd> | Quick Look |
-| Double-click | Open in Preview |
+| Double-click, pencil button | Annotate |
 | <kbd>Esc</kbd>, <kbd>⌘</kbd><kbd>W</kbd>, Close | Close |
-| Right-click | Copy, Save, Save As…, Close |
+| Right-click | Annotate, Copy, Save, Save As…, Close |
+
+In Capture History:
+
+| Key or click | Action |
+| --- | --- |
+| <kbd>←</kbd> <kbd>→</kbd>, click | Select a capture |
+| <kbd>Return</kbd> | Show it as a thumbnail again |
+| <kbd>Space</kbd> | Quick Look |
+| <kbd>⌘</kbd><kbd>C</kbd> | Copy and close |
+| <kbd>⌘</kbd><kbd>E</kbd>, double-click | Annotate |
+| <kbd>⌫</kbd> | Remove from the history (a saved file stays) |
+| Drag | Drop the file into any app |
+| <kbd>Esc</kbd>, <kbd>⌘</kbd><kbd>W</kbd> | Close |
+| Right-click | Restore, Annotate, Copy, Remove from History |
+
+In the editor:
+
+| Key or click | Action |
+| --- | --- |
+| Drag | Draw an arrow; with <kbd>⇧</kbd> at 45° steps |
+| Click an arrow, drag | Select and move it; drag an end to change it; <kbd>⌥</kbd>-drag moves a copy |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Move the selected arrow 1 pt; with <kbd>⇧</kbd> 10 pt |
+| <kbd>⌫</kbd> | Delete the selected arrow |
+| <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> | Undo / Redo |
+| <kbd>V</kbd> / <kbd>A</kbd> | Move tool (select and move only) / Arrow tool |
+| Save As…, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>S</kbd> | Save a copy where you pick, and close |
+| <kbd>⌥</kbd>-click Save As… (it shows Save), <kbd>⌘</kbd><kbd>S</kbd> | Save a copy to the screenshots folder, and close |
+| Copy, <kbd>⇧</kbd><kbd>⌘</kbd><kbd>C</kbd> | Copy and close; <kbd>⌥</kbd>-click Copy keeps the editor open |
+| <kbd>Esc</kbd> | Deselect; with nothing selected, close |
+| Close button, <kbd>⌘</kbd><kbd>W</kbd>, <kbd>⌘</kbd><kbd>Q</kbd> | Close the editor; the changes stay in the capture |
+| Drag Me | Drag the result into any app; a click closes the editor |
+| Right-click | Undo, Redo, Delete, Copy, Save, Save As…, Close |
 
 ## Install (from source)
 

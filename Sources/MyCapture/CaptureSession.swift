@@ -18,7 +18,7 @@ struct CaptureSession {
     func run(_ mode: CaptureMode, sound: Bool, testRect: CGRect? = nil) async throws -> Capture? {
         let output = try files.newTempFile()
         let command = testRect.map { CaptureCommand.rect($0, output: output) } ?? .interactive(mode, output: output, sound: sound)
-        // Area captures get the ⌘ crosshair, and the frozen screen when Settings turn it on (as in CleanShot X).
+        // Area captures get the ⌘ crosshair, and the frozen screen when Settings turn it on.
         let freeze = FreezeOverlay()
         if mode == .area { await freeze.show(frozen: freezeScreen) }
         defer { freeze.hide() }

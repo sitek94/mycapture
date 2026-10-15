@@ -20,7 +20,7 @@ final class AppModel {
     var playSound = UserDefaults.standard.object(forKey: "playSound") as? Bool ?? true {
         didSet { UserDefaults.standard.set(playSound, forKey: "playSound") }
     }
-    /// Off by default, as in CleanShot X: a live screen lets you pick a moment of a video while you drag.
+    /// Off by default: a live screen lets you pick a moment of a video while you drag.
     var freezeScreen = UserDefaults.standard.bool(forKey: "freezeScreen") {
         didSet { UserDefaults.standard.set(freezeScreen, forKey: "freezeScreen") }
     }
@@ -40,7 +40,7 @@ final class AppModel {
     }
     private(set) var capturing = false
 
-    // Defaults match the CleanShot X setup this app replaces: ⌃⇧⌘ + a letter.
+    // Defaults: ⌃⇧⌘ + a letter; Restore Last Capture has none.
     @ObservationIgnored private(set) lazy var areaShortcut = GlobalShortcut(name: "areaThumbnail", default: Self.shortcut(kVK_ANSI_A)) {
         [weak self] in self?.capture(.area, to: .thumbnail)
     }
@@ -50,29 +50,38 @@ final class AppModel {
     @ObservationIgnored private(set) lazy var windowShortcut = GlobalShortcut(name: "windowThumbnail", default: Self.shortcut(kVK_ANSI_W)) {
         [weak self] in self?.capture(.window, to: .thumbnail)
     }
-    @ObservationIgnored private(set) lazy var restoreShortcut = GlobalShortcut(name: "restore", default: Self.shortcut(kVK_ANSI_H)) {
+    @ObservationIgnored private(set) lazy var restoreShortcut = GlobalShortcut(name: "restore", default: nil) {
         [weak self] in self?.restoreLast()
     }
+    @ObservationIgnored private(set) lazy var historyShortcut = GlobalShortcut(name: "history", default: Self.shortcut(kVK_ANSI_H)) {
+        [weak self] in self?.history.toggle()
+    }
+    @ObservationIgnored private(set) lazy var history = HistoryController(
+        persist: !Self.uiTest,
+        actions: HistoryActions(
+            restore: { [weak self] in self?.showThumbnail($0) },
+            copy: { [weak self] in self?.copy($0) ?? false },
+            annotate: { [weak self] in self?.annotate($0) },
+            preview: { [weak self] in self?.quickLook.toggle($0.file) },
+            removed: { [weak self] in self?.purgeTemp() }))
     @ObservationIgnored let files: CaptureFiles
     @ObservationIgnored private let log = Logger(subsystem: "dev.maciek.mycapture", category: "app")
     /// The last clipboard capture: its file stays, so a pasted file reference keeps working.
     @ObservationIgnored private var clipboardCapture: Capture?
     @ObservationIgnored private let quickLook = QuickLookPreview()
-    @ObservationIgnored private lazy var stack = ThumbnailStack(
+    /// Open editors, one per capture.
+    @ObservationIgnored private(set) var editors: [Capture.ID: EditorWindow] = [:]
+    @ObservationIgnored private(set) lazy var stack = ThumbnailStack(
         actions: ThumbnailActions(
             copy: { [weak self] in self?.copy($0) ?? false },
             save: { [weak self] in self?.save($0) ?? false },
             saveAs: { [weak self] in self?.saveAs($0) },
-            close: { [weak self] in self?.thumbnails.close($0.id) },
-            open: {
-                NSWorkspace.shared.open([$0.file], withApplicationAt: URL(filePath: "/System/Applications/Preview.app"), configuration: .init())
-            },
+            close: { [weak self] in self?.closeThumbnail($0.id) },
+            annotate: { [weak self] in self?.annotate($0) },
             preview: { [weak self] in self?.quickLook.toggle($0.file) }
         ))
-    @ObservationIgnored private lazy var settingsWindow = SettingsWindow(title: "myCapture Settings", tint: .brand) {
-        [unowned self] in
-        SettingsSections(app: self)
-    }
+    @ObservationIgnored private lazy var settingsWindow = SettingsWindow(
+        title: "myCapture Settings", panes: SettingsPanes.all(self))
 
     init() {
         let tempDir = Self.uiTest ? UserDefaults.standard.string(forKey: "tempDir").map { URL(filePath: $0) } : nil
@@ -80,20 +89,7 @@ final class AppModel {
     }
 
     func start() {
-        ToastPanel.tint = .brand
-        if Self.uiTest {
-            DistributedNotificationCenter.default().addObserver(
-                forName: .init("dev.maciek.mycapture.test.settings"), object: nil, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.showSettings() }
-            }
-            DistributedNotificationCenter.default().addObserver(
-                forName: .init("dev.maciek.mycapture.test.thumbnail"), object: nil, queue: .main
-            ) { [weak self] note in
-                let action = note.userInfo?["action"] as? String
-                MainActor.assumeIsolated { self?.testThumbnailAction(action) }
-            }
-        }
+        if Self.uiTest { startTestHooks() }
         FreezeOverlay.warmUp()
         // Permission changes happen in System Settings; refresh what the menu and Settings show.
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
@@ -101,7 +97,7 @@ final class AppModel {
         }
         RunLoop.main.add(timer, forMode: .common)
         // Registers the global shortcuts.
-        _ = (areaShortcut, clipboardShortcut, windowShortcut, restoreShortcut)
+        _ = (areaShortcut, clipboardShortcut, windowShortcut, restoreShortcut, historyShortcut)
         // Thumbnails on screen at quit come back, if their files are still there.
         let data = Self.uiTest ? nil : UserDefaults.standard.data(forKey: "thumbnails")
         if let data {
@@ -112,20 +108,7 @@ final class AppModel {
                 thumbnails = list
             }
         } else {
-            files.purge(keeping: [])
-        }
-        if Self.uiTest {
-            DistributedNotificationCenter.default().addObserver(
-                forName: .init("dev.maciek.mycapture.test.capture"), object: nil, queue: .main
-            ) { [weak self] note in
-                let mode = note.userInfo?["mode"] as? String ?? "area"
-                let numbers = (note.userInfo?["rect"] as? String ?? "").split(separator: ",").compactMap { Double($0) }
-                guard numbers.count == 4 else { return }
-                let rect = CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
-                MainActor.assumeIsolated {
-                    self?.capture(mode == "window" ? .window : .area, to: mode == "clipboard" ? .clipboard : .thumbnail, testRect: rect)
-                }
-            }
+            files.purge(keeping: history.entries)
         }
     }
 
@@ -160,6 +143,7 @@ final class AppModel {
                     log.error("rename failed: \(error.localizedDescription, privacy: .public)")
                 }
                 if Self.uiTest { writeTestReport(capture) }
+                history.add(capture)
                 switch destination {
                 case .thumbnail:
                     thumbnails.add(capture, limit: stack.limit)
@@ -179,7 +163,7 @@ final class AppModel {
         }
     }
 
-    /// The clipboard gets the file and the image, as in CleanShot X: Finder and chat apps paste a file,
+    /// The clipboard gets the file and the image: Finder and chat apps paste a file,
     /// image editors paste the picture.
     @discardableResult
     func copy(_ capture: Capture) -> Bool {
@@ -212,14 +196,31 @@ final class AppModel {
         }
     }
 
-    /// ⌥-click on Save: asks where to save, then closes the thumbnail.
-    private func saveAs(_ capture: Capture) {
+    func showThumbnail(_ capture: Capture) {
+        thumbnails.add(capture, limit: stack.limit)
+    }
+
+    func closeThumbnail(_ id: Capture.ID) {
+        thumbnails.close(id)
+    }
+
+    /// The editor's Save: saves, then closes the thumbnail.
+    @discardableResult
+    func saveAndClose(_ capture: Capture) -> Bool {
+        guard save(capture) else { return false }
+        thumbnails.close(capture.id)
+        return true
+    }
+
+    /// ⌥-click on Save, and Save As in the editor: asks where to save, then closes the thumbnail. True when saved.
+    @discardableResult
+    func saveAs(_ capture: Capture) -> Bool {
         AppWindows.activate()
         let panel = NSSavePanel()
         panel.directoryURL = saveFolder
         panel.nameFieldStringValue = capture.file.lastPathComponent
         panel.allowedContentTypes = [.png]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
         do {
             // Copy first, then swap: a failed copy must not delete the file already there.
             let copy = capture.file.deletingLastPathComponent().appending(path: "save-as.png")
@@ -231,21 +232,26 @@ final class AppModel {
                 try FileManager.default.moveItem(at: copy, to: url)
             }
             thumbnails.close(capture.id)
+            return true
         } catch {
             warn("Could not save: \(error.localizedDescription)", at: Self.mouseLocation())
+            return false
         }
     }
 
     /// Never during a capture: the folder `screencapture` writes into is not in any list yet.
+    /// Captures open in an editor or in the history stay, also when their thumbnail is gone.
     private func purgeTemp() {
         guard !capturing else { return }
-        files.purge(keeping: thumbnails.all + (clipboardCapture.map { [$0] } ?? []))
+        files.purge(
+            keeping: thumbnails.all + (clipboardCapture.map { [$0] } ?? []) + editors.values.map(\.model.capture) + history.entries)
     }
 
     // MARK: Menu actions
 
-    func showSettings() {
-        settingsWindow.show()
+    /// - Parameter pane: a pane title, such as "Shortcuts"; nil shows the last one.
+    func showSettings(pane: String? = nil) {
+        settingsWindow.show(pane: pane)
     }
 
     func openSaveFolder() {
@@ -269,19 +275,6 @@ final class AppModel {
         screenRecordingAllowed = CGPreflightScreenCaptureAccess()
     }
 
-    /// Test runs act on the newest thumbnail: close, restore, save (into the `-saveFolder` launch argument) or Save As.
-    private func testThumbnailAction(_ action: String?) {
-        switch action {
-        case "close": thumbnails.visible.last.map { thumbnails.close($0.id) }
-        case "restore": restoreLast()
-        case "save":
-            // As the Save button does: save, then close the thumbnail.
-            if let capture = thumbnails.visible.last, save(capture) { thumbnails.close(capture.id) }
-        case "saveas": thumbnails.visible.last.map(saveAs)
-        default: break
-        }
-    }
-
     /// Test runs read the last capture record from `last-capture.json` in the temp folder.
     private func writeTestReport(_ capture: Capture) {
         let encoder = JSONEncoder()
@@ -301,5 +294,29 @@ final class AppModel {
     private static func mouseLocation() -> CGPoint {
         let point = NSEvent.mouseLocation
         return CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.height ?? 0) - point.y)
+    }
+}
+
+// MARK: Editor
+
+extension AppModel {
+    /// Opens the annotation editor, or brings it to the front when this capture already has one.
+    func annotate(_ capture: Capture) {
+        if let editor = editors[capture.id] {
+            editor.show()
+            return
+        }
+        let actions = EditorActions(
+            saved: { [weak self] in self?.stack.reload($0.id) },
+            copy: { [weak self] in self?.copy($0) ?? false },
+            save: { [weak self] in self?.saveAndClose($0) ?? false },
+            saveAs: { [weak self] in self?.saveAs($0) ?? false },
+            closed: { [weak self] in self?.editors[$0.id] = nil })
+        guard let editor = EditorWindow(capture: capture, actions: actions) else {
+            warn("Could not open the capture", at: stack.center(of: capture) ?? Self.mouseLocation())
+            return
+        }
+        editors[capture.id] = editor
+        editor.show()
     }
 }

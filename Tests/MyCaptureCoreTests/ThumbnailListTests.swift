@@ -16,6 +16,19 @@ struct ThumbnailListTests {
         #expect(list.closed == [captures[0]])
     }
 
+    @Test func addingAShownOrClosedCaptureMovesItToTheTop() {
+        var list = ThumbnailList()
+        let (first, second) = (capture(1), capture(2))
+        list.add(first)
+        list.add(second)
+        list.add(first)
+        #expect(list.visible == [second, first])
+        list.close(second.id)
+        list.add(second)
+        #expect(list.visible == [first, second])
+        #expect(list.closed.isEmpty)
+    }
+
     @Test func restoreBringsBackTheMostRecentlyClosed() {
         var list = ThumbnailList()
         let (first, second) = (capture(1), capture(2))

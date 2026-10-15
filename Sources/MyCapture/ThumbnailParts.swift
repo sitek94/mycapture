@@ -69,7 +69,7 @@ final class MenuTarget: NSObject {
 }
 
 /// Mouse handling the SwiftUI layer cannot do in a window that never becomes key: hover, file drag,
-/// double-click and the right-click menu.
+/// click, double-click and the right-click menu.
 struct MouseArea: NSViewRepresentable {
     let file: URL
     let image: NSImage
@@ -78,6 +78,7 @@ struct MouseArea: NSViewRepresentable {
     /// After a drop; true when ⌥ was held, so the thumbnail stays.
     let onDropped: (Bool) -> Void
     let menu: () -> NSMenu
+    var onClick: () -> Void = {}
 
     func makeNSView(context: Context) -> MouseAreaView {
         MouseAreaView(area: self)
@@ -113,6 +114,7 @@ final class MouseAreaView: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) {
         downEvent = event
+        if event.clickCount == 1 { area.onClick() }
         if event.clickCount == 2 { area.onDoubleClick() }
     }
 

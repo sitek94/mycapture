@@ -32,7 +32,7 @@ custom_rules:
     name: Raw corner radius
     regex: 'cornerRadius:\s*(?!0\b)\d'
     excluded_match_kinds: [comment, doccomment, string]
-    message: "Use a radius token: .radiusPanel (26), .radiusCard (16), .radiusInner (10), .radiusSmall (6), or ConcentricRectangle near a container corner."
+    message: "Use a radius token: .radiusPanel (20), .radiusCard (12), .radiusInner (9), .radiusSmall (6), .radiusThumbnail (17), or ConcentricRectangle near a container corner."
     severity: error
   system_font:
     name: System font style
@@ -46,14 +46,14 @@ custom_rules:
     regex: '(Color\(\s*(red|hue|white|\.sRGB|#)|\.(tint|foregroundStyle|fill|stroke|strokeBorder)\(\s*(Color)?\.(red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown)\b)'
     excluded: '.*/(Tokens|Brand)\.swift'
     excluded_match_kinds: [comment, doccomment, string]
-    message: "Use a color token: .brand (accent only), .success, .warning, .danger. Text levels: .primary, .secondary, .tertiary. The app's brand value lives in Brand.swift."
+    message: "Use a color token: .tint (the system accent: selection, primary actions), .success, .warning, .danger. Text levels: .primary, .secondary, .tertiary. An app's own color is for its icon only."
     severity: error
   direct_glass:
     name: Direct glass
     regex: '\.glassEffect\('
     excluded: '.*/Surfaces\.swift'
     excluded_match_kinds: [comment, doccomment, string]
-    message: "Use a myKit surface: .panelSurface(), .controlSurface(), .contentSurface()."
+    message: "Use a myKit surface: .panelSurface(), .capsuleSurface(), .contentSurface()."
     severity: error
   raw_animation:
     name: Raw animation

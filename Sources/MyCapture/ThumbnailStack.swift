@@ -11,7 +11,7 @@ struct ThumbnailActions {
     var save: (Capture) -> Bool
     var saveAs: (Capture) -> Void
     var close: (Capture) -> Void
-    var open: (Capture) -> Void
+    var annotate: (Capture) -> Void
     var preview: (Capture) -> Void
     /// Set by the stack: makes the keys of the hovered thumbnail, or nil when the pointer leaves it.
     var hoverKeys: (Capture.ID, (() -> HoverKeys)?) -> Void = { _, _ in }
@@ -73,6 +73,15 @@ final class ThumbnailStack {
         if TestHover.enabled { TestHover.shared.id = order.last }
         layout(on: screen)
         followMouse(order.isEmpty == false)
+    }
+
+    /// Shows the capture's file again after it changed (an annotation was saved).
+    func reload(_ id: Capture.ID) {
+        guard let panel = panels[id] else { return }
+        if hovered?.id == id { hovered = nil }
+        panel.orderOut(nil)
+        panels[id] = nil
+        show(captures)
     }
 
     /// During a capture the thumbnails stay on screen above the freeze, but out of the captured image.
@@ -161,7 +170,6 @@ final class ThumbnailPanel: OverlayPanel {
         super.init()
         let view = ThumbnailView(capture: capture, image: image, box: box, actions: actions)
             .padding(Self.margin)
-            .tint(.brand)
         let host = NSHostingView(rootView: view)
         host.sizingOptions = []
         contentView = host
@@ -191,11 +199,20 @@ final class TestHover {
 @Observable
 final class ThumbnailState {
     var hovering = false
-    /// A short checkmark after Copy or Save worked.
-    var done = false
+    /// The button that just worked (Copy or Save): it shows a checkmark before the thumbnail closes.
+    var done: String?
 }
 
+/// A capture: the image fills a rounded box. On hover, dark glass covers the image, with
+/// Copy and Save in the center, Close at the top-left and Annotate at the bottom-left, in light frosted buttons.
 struct ThumbnailView: View {
+    /// Corner buttons sit this far in from the box edge.
+    static let cornerInset: CGFloat = 6
+    /// Between Copy and Save.
+    static let buttonGap: CGFloat = 10
+    /// The curtain sits 1 pt inside the box's corner.
+    static let curtainRadius: CGFloat = .radiusThumbnail - 1
+
     let capture: Capture
     let image: NSImage
     let box: CGSize
@@ -206,29 +223,23 @@ struct ThumbnailView: View {
         ZStack {
             Checkerboard()
             Image(nsImage: image).resizable().scaledToFill().frame(width: box.width, height: box.height).clipped()
-            // On hover the image blurs behind the controls, as in CleanShot X.
-            if hovering || state.done {
-                Rectangle().fill(.ultraThinMaterial)
+            if hovering || state.done != nil {
+                Color.clear.curtainSurface(cornerRadius: Self.curtainRadius).transition(.opacity)
             }
             MouseArea(
                 file: capture.file, image: image,
                 onHover: hover,
-                onDoubleClick: { actions.open(capture) },
+                onDoubleClick: { actions.annotate(capture) },
                 onDropped: { keepOpen in if !keepOpen { actions.close(capture) } },
                 menu: contextMenu
             )
-            if state.done {
-                Image(systemName: "checkmark.circle.fill")
-                    // swiftlint:disable:next system_font
-                    .font(.system(size: 40))  // a symbol used as a picture
-                    .foregroundStyle(.white)
-            } else if hovering {
+            if hovering || state.done != nil {
                 controls.transition(.opacity)
             }
         }
         .frame(width: box.width, height: box.height)
-        .clipShape(.rect(cornerRadius: .radiusCard))
-        .overlay(RoundedRectangle(cornerRadius: .radiusCard).strokeBorder(.gray.opacity(0.4)))
+        .clipShape(.rect(cornerRadius: .radiusThumbnail))
+        .overlay(RoundedRectangle(cornerRadius: .radiusThumbnail).strokeBorder(.gray.opacity(0.4)))
         .shadow(color: .black.opacity(0.6), radius: 12, y: 15)
         .animation(.quick, value: hovering)
         .animation(.quick, value: state.done)
@@ -236,45 +247,51 @@ struct ThumbnailView: View {
 
     private var hovering: Bool { state.hovering || TestHover.shared.id == capture.id }
 
-    /// CleanShot X's layout: Copy and Save as equal-width pills in the center, Close at the top-left. Always light, on
-    /// a fill that does not adapt to the image, so they read the same on any capture.
     private var controls: some View {
         ZStack {
-            VStack(spacing: .space2) {
-                Button {
-                    copy()
-                } label: {
-                    Text("Copy").frame(maxWidth: .infinity)
-                }
-                Button {
-                    save()
-                } label: {
-                    Text("Save").frame(maxWidth: .infinity)
-                }
+            VStack(spacing: Self.buttonGap) {
+                Button(action: copy) { title("Copy") }
+                    .help("Copy to the clipboard (⌘C); ⌥-click keeps the thumbnail")
+                Button(action: save) { title("Save") }
+                    .help("Save to the screenshots folder (⌘S); ⌥-click to choose where")
             }
-            .buttonStyle(.pill)
-            .fixedSize()
+            .buttonStyle(.overlay)
             VStack {
-                HStack {
-                    Button("Close", systemImage: "xmark") { actions.close(capture) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.pillIcon)
-                        .help("Close")
-                    Spacer()
+                Button {
+                    actions.close(capture)
+                } label: {
+                    ControlGlyph.close
                 }
+                .accessibilityLabel("Close")
+                .help("Close (Esc)")
                 Spacer()
+                Button {
+                    actions.annotate(capture)
+                } label: {
+                    ControlGlyph.pencil
+                }
+                .accessibilityLabel("Annotate")
+                .help("Annotate")
             }
-            .padding(.space2)
+            .buttonStyle(.overlayIcon)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Self.cornerInset)
         }
-        .environment(\.colorScheme, .light)
-        .controlBackdrop(.image)
+    }
+
+    /// A button title; after it worked, a checkmark before it.
+    private func title(_ text: String) -> some View {
+        HStack(spacing: .space1) {
+            if state.done == text { Image(systemName: "checkmark") }
+            Text(text)
+        }
     }
 
     /// Copy closes the thumbnail after a short checkmark; with ⌥ held it stays.
     private func copy() {
         let keepOpen = NSEvent.modifierFlags.contains(.option)
         guard actions.copy(capture) else { return }
-        finish(close: !keepOpen)
+        finish("Copy", close: !keepOpen)
     }
 
     /// Save closes the thumbnail after a short checkmark; with ⌥ held it asks where to save instead.
@@ -282,21 +299,21 @@ struct ThumbnailView: View {
         if NSEvent.modifierFlags.contains(.option) {
             actions.saveAs(capture)
         } else if actions.save(capture) {
-            finish(close: true)
+            finish("Save", close: true)
         }
     }
 
-    private func finish(close: Bool) {
-        state.done = true
+    private func finish(_ button: String, close: Bool) {
+        state.done = button
         Task {
             try? await Task.sleep(for: .milliseconds(200))
-            if close { actions.close(capture) } else { state.done = false }
+            if close { actions.close(capture) } else { state.done = nil }
         }
     }
 
     private func hover(_ inside: Bool) {
         state.hovering = inside
-        // While the pointer rests on a thumbnail, these keys act on it without clicking, as in CleanShot X.
+        // While the pointer rests on a thumbnail, these keys act on it without clicking.
         actions.hoverKeys(
             capture.id,
             inside
@@ -309,6 +326,8 @@ struct ThumbnailView: View {
 
     private func contextMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(closureMenuItem("Annotate") { actions.annotate(capture) })
+        menu.addItem(.separator())
         menu.addItem(closureMenuItem("Copy") { copy() })
         menu.addItem(closureMenuItem("Save") { save() })
         menu.addItem(closureMenuItem("Save As…") { actions.saveAs(capture) })

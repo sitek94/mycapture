@@ -12,7 +12,10 @@ public struct ThumbnailList: Codable, Equatable, Sendable {
     public init() {}
 
     /// Adds a capture. When more than `limit` show (as many as fit on the screen), the oldest closes.
+    /// A capture already in the list (shown or closed) moves to the top instead of showing twice.
     public mutating func add(_ capture: Capture, limit: Int = .max) {
+        visible.removeAll { $0.id == capture.id }
+        closed.removeAll { $0.id == capture.id }
         visible.append(capture)
         while visible.count > max(limit, 1) {
             close(visible[0].id)
