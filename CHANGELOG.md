@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — 2026-10-18
+
+- Drag from Capture History: the strip closes when the pointer leaves it, so it no longer covers the place you drop on.
+- A dragged capture shows as a small picture under the pointer, also from the editor's Drag Me.
+- README picture with the current thumbnail icons.
+
 ## 0.2.0 — 2026-10-15
 
 - Crisp icons: filled, heavier glyphs of one size in the editor toolbar, its bottom bar and the thumbnail; the Arrow tool shows ↙ and the color button a dot in a white ring. The Drag Me border is even all around on non-Retina screens.

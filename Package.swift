@@ -10,7 +10,7 @@ let package = Package(
         .executable(name: "myCaptureDriver", targets: ["MyCaptureDriver"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/sitek94/mykit", from: "0.5.1"),
+        .package(url: "https://github.com/sitek94/mykit", from: "0.6.0"),
         // Pins the SwiftLint binary that scripts/check.sh runs (same version as myKit); no target uses it.
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", exact: "0.65.1"),
     ],

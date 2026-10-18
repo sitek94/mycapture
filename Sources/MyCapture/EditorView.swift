@@ -118,9 +118,12 @@ struct EditorView: View {
         VStack(spacing: 0) {
             Rectangle().fill(.chrome(scheme == .dark ? 0.04 : 0.1)).frame(height: 1)
             ZStack {
-                DragOutButton(
-                    title: "Drag Me", file: model.capture.file, prepare: commands.prepareDrag,
-                    click: commands.close)
+                DragOutButton(title: "Drag Me", click: commands.close)
+                    .onGeometryChange(for: CGRect.self) {
+                        $0.frame(in: .global)
+                    } action: {
+                        model.dragOutFrame = $0
+                    }
                 HStack(spacing: Metrics.gap) {
                     Spacer()
                     Button(action: commands.copy) { ControlGlyph.copy }
@@ -222,14 +225,12 @@ struct Swatch: View {
     }
 }
 
-/// The capture as a file to drag into another app; a click closes the editor, keeping the changes.
+/// The capture as a file to drag into another app; a click closes the editor, keeping the changes. The editor window's
+/// `DragSource` starts the drag from this button's frame.
 struct DragOutButton: View {
     static let size = CGSize(width: 115, height: 31)
 
     let title: String
-    let file: URL
-    /// Runs before a drag starts, so the dragged file holds the current markups.
-    let prepare: () -> Void
     let click: () -> Void
     @Environment(\.colorScheme) private var scheme
     @Environment(\.appearsActive) private var active
@@ -254,7 +255,7 @@ struct DragOutButton: View {
                 Capsule().strokeBorder(.white, lineWidth: 1)
             }
         }
-        .overlay(DragArea(file: file, prepare: prepare, click: click))
+        .overlay(ClickArea(click: click))
         .help("Drag into any app, or click to close")
     }
 
@@ -269,26 +270,27 @@ struct DragOutButton: View {
     }
 }
 
-/// Click and file drag for `DragOutButton`, which SwiftUI gestures cannot give together.
-private struct DragArea: NSViewRepresentable {
-    let file: URL
-    let prepare: () -> Void
+/// A click on mouse up for `DragOutButton`. A press that moved is a drag, not a click.
+private struct ClickArea: NSViewRepresentable {
     let click: () -> Void
 
-    func makeNSView(context: Context) -> DragAreaView {
-        DragAreaView(area: self)
+    func makeNSView(context: Context) -> ClickAreaView {
+        ClickAreaView(area: self)
     }
 
-    func updateNSView(_ view: DragAreaView, context: Context) {
+    func updateNSView(_ view: ClickAreaView, context: Context) {
         view.area = self
     }
 }
 
-private final class DragAreaView: NSView, NSDraggingSource {
-    var area: DragArea
+private final class ClickAreaView: NSView {
+    /// The distance at which a press becomes a drag, as in `DragSource`.
+    static let dragDistance: CGFloat = 3
+
+    var area: ClickArea
     private var downEvent: NSEvent?
 
-    init(area: DragArea) {
+    init(area: ClickArea) {
         self.area = area
         super.init(frame: .zero)
     }
@@ -301,23 +303,9 @@ private final class DragAreaView: NSView, NSDraggingSource {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard downEvent != nil else { return }
-        downEvent = nil
-        area.click()
-    }
-
-    override func mouseDragged(with event: NSEvent) {
         guard let down = downEvent else { return }
-        let moved = hypot(event.locationInWindow.x - down.locationInWindow.x, event.locationInWindow.y - down.locationInWindow.y)
-        guard moved > 3 else { return }
         downEvent = nil
-        area.prepare()
-        let item = NSDraggingItem(pasteboardWriter: area.file as NSURL)
-        item.setDraggingFrame(bounds, contents: NSImage(contentsOf: area.file))
-        beginDraggingSession(with: [item], event: down, source: self)
-    }
-
-    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        .copy
+        let moved = hypot(event.locationInWindow.x - down.locationInWindow.x, event.locationInWindow.y - down.locationInWindow.y)
+        if moved <= Self.dragDistance { area.click() }
     }
 }

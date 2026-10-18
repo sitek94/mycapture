@@ -68,7 +68,7 @@ In Capture History:
 | <kbd>⌘</kbd><kbd>C</kbd> | Copy and close |
 | <kbd>⌘</kbd><kbd>E</kbd>, double-click | Annotate |
 | <kbd>⌫</kbd> | Remove from the history (a saved file stays) |
-| Drag | Drop the file into any app |
+| Drag | Drop the file into any app; the strip closes when the pointer leaves it |
 | <kbd>Esc</kbd>, <kbd>⌘</kbd><kbd>W</kbd> | Close |
 | Right-click | Restore, Annotate, Copy, Remove from History |
 

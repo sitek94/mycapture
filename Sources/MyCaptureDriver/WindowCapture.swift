@@ -49,7 +49,9 @@ func windowShot(path: String, windowID: CGWindowID) async -> (String, Int32) {
 }
 
 /// The first app, front to back, whose on-screen window overlaps the rect above the driver's test window.
-/// The rect is in global top-left coordinates, as CGWindowList bounds are. The menu bar and the Dock do not count.
+/// The rect is in global top-left coordinates, as CGWindowList bounds are. The menu bar and the Dock do not count, nor
+/// Notification Center: while a notification shows, its host window spans the whole screen, but notifications sit at
+/// the top-right, away from the test window.
 @MainActor func coveringOwner(_ rect: CGRect) -> String? {
     let all = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
     for info in all {
@@ -60,7 +62,7 @@ func windowShot(path: String, windowID: CGWindowID) async -> (String, Int32) {
         else { continue }
         // Below the test window nothing shows in the capture.
         if owner == "myCaptureDriver" { return nil }
-        if ["myCapture", "Window Server", "Dock", "Control Center"].contains(owner) { continue }
+        if ["myCapture", "Window Server", "Dock", "Control Center", "Notification Center"].contains(owner) { continue }
         return owner
     }
     return nil

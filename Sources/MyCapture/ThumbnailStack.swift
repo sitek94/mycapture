@@ -165,6 +165,7 @@ final class ThumbnailPanel: OverlayPanel {
     static let margin: CGFloat = 32
 
     private(set) var boxFrame: CGRect = .zero
+    private var drag: DragSource?
 
     init(capture: Capture, image: NSImage, box: CGSize, actions: ThumbnailActions) {
         super.init()
@@ -173,6 +174,17 @@ final class ThumbnailPanel: OverlayPanel {
         let host = NSHostingView(rootView: view)
         host.sizingOptions = []
         contentView = host
+        let drag = DragSource(window: self)
+        // A press on the image itself, where the mouse area gets it: not on the margin or a button.
+        drag.items = { [weak self] point in
+            guard self?.contentView?.hitTest(point) is MouseAreaView else { return [] }
+            return [DragItem(writer: capture.file as NSURL, image: image)]
+        }
+        // After a drop the thumbnail closes; with ⌥ held it stays.
+        drag.onEnd = { dropped in
+            if dropped, !NSEvent.modifierFlags.contains(.option) { actions.close(capture) }
+        }
+        self.drag = drag
     }
 
     func place(box: CGRect) {
@@ -226,13 +238,7 @@ struct ThumbnailView: View {
             if hovering || state.done != nil {
                 Color.clear.curtainSurface(cornerRadius: Self.curtainRadius).transition(.opacity)
             }
-            MouseArea(
-                file: capture.file, image: image,
-                onHover: hover,
-                onDoubleClick: { actions.annotate(capture) },
-                onDropped: { keepOpen in if !keepOpen { actions.close(capture) } },
-                menu: contextMenu
-            )
+            MouseArea(onHover: hover, onDoubleClick: { actions.annotate(capture) }, menu: contextMenu)
             if hovering || state.done != nil {
                 controls.transition(.opacity)
             }

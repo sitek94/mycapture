@@ -30,9 +30,12 @@ final class HistoryController {
         }
     }
     var selection: Capture.ID?
+    /// Each shown card's image in the panel content, from its top-left: where a drag can start.
+    @ObservationIgnored var cardFrames: [Capture.ID: CGRect] = [:]
     @ObservationIgnored private let persist: Bool
     @ObservationIgnored private let actions: HistoryActions
     @ObservationIgnored private var panel: StripPanel?
+    @ObservationIgnored private var drag: DragSource?
     @ObservationIgnored private var closedAt: Date?
 
     /// - Parameter persist: false in test runs, which share the app's defaults.
@@ -103,6 +106,17 @@ final class HistoryController {
         panel.setContent { HistoryStrip(controller: self) }
         panel.keys = { [weak self] key in self?.handle(key) ?? false }
         panel.onClose = { [weak self] _ in self?.closedAt = .now }
+        let drag = DragSource(window: panel)
+        drag.items = { [weak self, weak drag] point in
+            guard let self, let point = drag?.contentPoint(point),
+                let id = cardFrames.first(where: { $0.value.contains(point) })?.key,
+                let capture = entries.first(where: { $0.id == id })
+            else { return [] }
+            return [DragItem(writer: capture.file as NSURL, image: NSImage(contentsOf: capture.file) ?? NSImage())]
+        }
+        // The strip covers the top of the screen: it steps aside for the drop target, as the other actions close it.
+        drag.onLeaveWindow = { [weak self] in self?.close() }
+        self.drag = drag
         return panel
     }
 
@@ -293,14 +307,16 @@ struct HistoryCard: View {
                 Image(nsImage: image).resizable().scaledToFill()
             }
             MouseArea(
-                file: capture.file, image: image ?? NSImage(),
-                onHover: { _ in },
-                onDoubleClick: { controller.annotate(capture) },
-                onDropped: { _ in },
-                menu: menu,
+                onHover: { _ in }, onDoubleClick: { controller.annotate(capture) }, menu: menu,
                 onClick: { controller.selection = capture.id })
         }
         .frame(width: Self.image.width, height: Self.image.height)
+        .onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .global)
+        } action: {
+            controller.cardFrames[capture.id] = $0
+        }
+        .onDisappear { controller.cardFrames[capture.id] = nil }
         .clipShape(.rect(cornerRadius: .radiusCard))
         .overlay(RoundedRectangle(cornerRadius: .radiusCard).strokeBorder(.gray.opacity(0.2)))
         .shadow(color: .black.opacity(0.3), radius: 13, y: 5)

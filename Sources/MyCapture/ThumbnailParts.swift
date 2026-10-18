@@ -68,15 +68,11 @@ final class MenuTarget: NSObject {
     @objc func run() { handler() }
 }
 
-/// Mouse handling the SwiftUI layer cannot do in a window that never becomes key: hover, file drag,
-/// click, double-click and the right-click menu.
+/// Mouse handling the SwiftUI layer cannot do in a window that never becomes key: hover, click, double-click and the
+/// right-click menu. A drag out is the window's `DragSource`.
 struct MouseArea: NSViewRepresentable {
-    let file: URL
-    let image: NSImage
     let onHover: (Bool) -> Void
     let onDoubleClick: () -> Void
-    /// After a drop; true when ⌥ was held, so the thumbnail stays.
-    let onDropped: (Bool) -> Void
     let menu: () -> NSMenu
     var onClick: () -> Void = {}
 
@@ -89,9 +85,8 @@ struct MouseArea: NSViewRepresentable {
     }
 }
 
-final class MouseAreaView: NSView, NSDraggingSource {
+final class MouseAreaView: NSView {
     var area: MouseArea
-    private var downEvent: NSEvent?
 
     init(area: MouseArea) {
         self.area = area
@@ -113,31 +108,11 @@ final class MouseAreaView: NSView, NSDraggingSource {
     override func mouseExited(with event: NSEvent) { area.onHover(false) }
 
     override func mouseDown(with event: NSEvent) {
-        downEvent = event
         if event.clickCount == 1 { area.onClick() }
         if event.clickCount == 2 { area.onDoubleClick() }
     }
 
     override func rightMouseDown(with event: NSEvent) {
         NSMenu.popUpContextMenu(area.menu(), with: event, for: self)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let down = downEvent else { return }
-        let moved = hypot(event.locationInWindow.x - down.locationInWindow.x, event.locationInWindow.y - down.locationInWindow.y)
-        guard moved > 3 else { return }
-        downEvent = nil
-        let item = NSDraggingItem(pasteboardWriter: area.file as NSURL)
-        item.setDraggingFrame(bounds, contents: area.image)
-        beginDraggingSession(with: [item], event: down, source: self)
-    }
-
-    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        .copy
-    }
-
-    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        guard !operation.isEmpty else { return }
-        area.onDropped(NSEvent.modifierFlags.contains(.option))
     }
 }

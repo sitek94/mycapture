@@ -33,6 +33,8 @@ final class EditorModel {
     let properties: [CFString: Any]
     /// Image pixels per point: 2 for a Retina capture.
     let scale: Double
+    /// The Drag Me button in the window content, from its top-left.
+    @ObservationIgnored var dragOutFrame: CGRect = .zero
 
     init?(capture: Capture) {
         let store = AnnotationStore(file: capture.file)
@@ -77,6 +79,7 @@ final class EditorModel {
 final class EditorWindow: NSWindowController, NSWindowDelegate {
     let model: EditorModel
     private let actions: EditorActions
+    private var drag: DragSource?
 
     init?(capture: Capture, actions: EditorActions) {
         guard let model = EditorModel(capture: capture) else { return nil }
@@ -96,6 +99,9 @@ final class EditorWindow: NSWindowController, NSWindowDelegate {
         window.contentMinSize = CGSize(width: 990, height: 400)
         window.delegate = self
         window.editor = self
+        let drag = DragSource(window: window)
+        drag.items = { [weak self] point in self?.dragItems(at: point) ?? [] }
+        self.drag = drag
     }
 
     @available(*, unavailable)
@@ -107,10 +113,15 @@ final class EditorWindow: NSWindowController, NSWindowDelegate {
             save: { [weak self] in self?.save() },
             saveAs: { [weak self] in self?.saveAs() },
             saveOrSaveAs: { [weak self] in self?.saveOrSaveAs() },
-            close: { [weak self] in self?.window?.performClose(nil) },
-            prepareDrag: { [weak self] in
-                if self?.model.editor.isModified == true { self?.saveInPlace() }
-            })
+            close: { [weak self] in self?.window?.performClose(nil) })
+    }
+
+    /// A press on Drag Me drags the file, with the changes saved into it first.
+    private func dragItems(at point: CGPoint) -> [DragItem] {
+        guard let drag, model.dragOutFrame.contains(drag.contentPoint(point)) else { return [] }
+        if model.editor.isModified { saveInPlace() }
+        let file = model.capture.file
+        return [DragItem(writer: file as NSURL, image: NSImage(contentsOf: file) ?? NSImage())]
     }
 
     /// The first show centers the window and gives the app a Dock icon; later ones only bring it to the front.
@@ -220,8 +231,6 @@ struct EditorCommands {
     /// The main button: Save As…, or Save with ⌥ held.
     var saveOrSaveAs: () -> Void
     var close: () -> Void
-    /// Before the file is dragged out: saves the changes into it.
-    var prepareDrag: () -> Void
 }
 
 /// The editor window. ⌘ keys reach it before the app's menu, which has no File menu in a menu bar app.
