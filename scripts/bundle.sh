@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 IDENTITY="${MYCAPTURE_SIGN_IDENTITY:-Apple Development}"
 # Bump with every tagged version (see CHANGELOG.md).
-VERSION=0.2.1
+VERSION=0.2.2
 BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 [[ -n "$(git status --porcelain 2>/dev/null)" ]] && COMMIT="$COMMIT-dirty"

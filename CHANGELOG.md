@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 — 2026-10-19
+
+- Capture History closes without a jump or a fade.
+
 ## 0.2.1 — 2026-10-18
 
 - Drag from Capture History: the strip closes when the pointer leaves it, so it no longer covers the place you drop on.
